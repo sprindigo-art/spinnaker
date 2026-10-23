@@ -1,0 +1,7 @@
+dependencies {
+  implementation project(":swabbie-core")
+  implementation "com.natpryce:hamkrest"
+  implementation "io.strikt:strikt-core"
+  implementation "org.slf4j:jcl-over-slf4j"
+  implementation "com.fasterxml.jackson.core:jackson-annotations"
+}

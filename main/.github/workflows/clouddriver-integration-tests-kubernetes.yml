@@ -1,0 +1,102 @@
+name: Clouddriver k8s Integration Tests
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - main
+      - release-*
+    paths:
+      - 'clouddriver/**'
+      - 'fiat/**'
+      - 'kork/**'
+      - '.github/workflows/clouddriver-integration-tests-kubernetes.yml'
+
+  pull_request:
+    paths:
+      - 'clouddriver/**'
+      - 'fiat/**'
+      - 'kork/**'
+      - '.github/workflows/clouddriver-integration-tests-kubernetes.yml'
+
+env:
+  GRADLE_OPTS: -Dorg.gradle.daemon=false -Xmx12g -Xms12g
+
+jobs:
+  prepare-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.result }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Read shared Kubernetes versions
+        id: matrix
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { versions, defaultMinor, kindVersion } =
+              require('./clouddriver/kubectl-versions.json');
+            const defaultClient = versions[defaultMinor].kubectl;
+            const [major, minor] = defaultMinor.split('.').map(Number);
+
+            const include = [-1, 0, 1].map(skew => {
+              const serverMinor = `${major}.${minor + skew}`;
+              const version = versions[serverMinor];
+              if (!version?.kubernetesImage) {
+                throw new Error(`Missing Kubernetes test image for ${serverMinor}`);
+              }
+
+              return {
+                'kubernetes-version': serverMinor,
+                'kubernetes-image': version.kubernetesImage,
+                'kubectl-version': defaultClient,
+                'kind-version': version.kindVersion ?? kindVersion,
+              };
+            });
+
+            return { include };
+
+  it-test-kubernetes:
+    needs: prepare-matrix
+    name: Kubernetes ${{ matrix.kubernetes-version }} / kubectl ${{ matrix.kubectl-version }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare-matrix.outputs.matrix) }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          java-version: |
+            25
+          distribution: 'zulu'
+
+      - name: Cache on push
+        if: github.event_name == 'push'
+        uses: actions/cache@v6
+        with:
+          path: ~/.gradle
+          key: ${{ runner.os }}-cd-it-${{ github.sha }}
+          # Restore build outputs from the previous commit (if successful), if current commit hasn't run successfully yet
+          restore-keys: |
+            ${{ runner.os }}-cd-it-${{ github.event.before }}
+
+      - name: Cache on pull_request
+        if: github.event_name == 'pull_request'
+        uses: actions/cache@v6
+        with:
+          path: ~/.gradle
+          key: ${{ runner.os }}-cd-it-${{ github.event.pull_request.head.sha }}
+          restore-keys: |
+            ${{ runner.os }}-cd-it-${{ github.event.before }}
+
+      - name: Kubernetes Provider Integration Tests
+        env:
+          KUBERNETES_IMAGE: ${{ matrix.kubernetes-image }}
+          KUBECTL_VERSION: ${{ matrix.kubectl-version }}
+          KIND_VERSION: ${{ matrix.kind-version }}
+        run: |
+          ./gradlew --build-cache :clouddriver:clouddriver-kubernetes:integrationTest \
+            -Pkubernetes-image="$KUBERNETES_IMAGE" -Pkubectl-version="$KUBECTL_VERSION" \
+            -Pkind-version="$KIND_VERSION"

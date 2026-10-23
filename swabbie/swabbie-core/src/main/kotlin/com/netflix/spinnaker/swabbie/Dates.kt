@@ -1,0 +1,75 @@
+/*
+ * Copyright 2018 Netflix, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License")
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.netflix.spinnaker.swabbie
+
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeFormatterBuilder
+
+
+
+class Dates {
+  companion object {
+    private val formats: List<DateTimeFormatter> = listOf(
+      DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSS'Z'"),
+      DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssZ"),
+      DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"),
+      DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSZ"),
+      DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS"),
+      DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSSSS"),
+      DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSSSSSSS"),
+      DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm"),
+      DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss"),
+      DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSZ"),
+      DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"),
+      DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"),
+      DateTimeFormatter.ofPattern("yyyy-MM-dd"),
+      DateTimeFormatter.ofPattern("MM/dd/yyyy"),
+      DateTimeFormatter.ofPattern("MMMM d, yyyy h:mm a"),
+      DateTimeFormatter.ofPattern("MMMM d, yyyy"),
+      DateTimeFormatter.ofPattern("MMMM d, yyyy"),
+        DateTimeFormatter.ISO_INSTANT,
+    )
+
+    fun toLocalDateTime(date: String): LocalDateTime {
+      var exception: Exception? = null
+      formats.forEach { format ->
+        try {
+          return LocalDateTime.parse(date, format)
+        } catch (e: Exception) {
+          System.err.println("Failed to process with format $format")
+          exception = e
+        }
+      }
+      System.err.println("Failed to process date $date")
+
+      throw exception!!
+    }
+
+    fun toCreationDate(timestampMillis: Long): String {
+      return LocalDateTime
+        .ofInstant(Instant.ofEpochMilli(timestampMillis), ZoneId.of("America/Los_Angeles"))
+        .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSS'Z'"))
+    }
+
+    fun toInstant(localDateTime: LocalDateTime): Instant {
+      return localDateTime.atZone(ZoneId.systemDefault()).toInstant()
+    }
+  }
+}
